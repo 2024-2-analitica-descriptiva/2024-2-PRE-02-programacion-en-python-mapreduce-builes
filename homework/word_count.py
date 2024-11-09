@@ -1,3 +1,7 @@
+# Este codigo simila como funciona el algoritmo de MapReduce en Hadoop. El codigo recibe un directorio de archivos de texto, realiza un preprocesamiento de las lineas de texto, 
+# cuenta la cantidad de palabras en cada linea, 
+# ordena las palabras y cuenta cuantas veces aparece cada palabra en el texto. Finalmente, el codigo almacena el resultado en un archivo de texto en un directorio de salida.
+
 """Taller evaluable"""
 
 # pylint: disable=broad-exception-raised
@@ -6,6 +10,8 @@ import fileinput
 import glob
 import os.path
 from itertools import groupby
+from pprint import pprint
+import string
 
 
 #
@@ -25,6 +31,19 @@ from itertools import groupby
 #
 def load_input(input_directory):
     """Funcion load_input"""
+    files = glob.glob(f"{input_directory}/*.txt")
+    # print()
+    # pprint(files)
+    # print()
+
+    sequence = []
+    # filesinput.input(files=files) recibe una lista de archivos, lee cada uno de los archivos y retorna una lista de lineas con las lineas de cada archivo
+    with fileinput.input(files=files) as f:
+        for line in f:
+            # .filename() retorna el nombre del archivo actual y line.strip() retorna la linea actual sin espacios
+            sequence.append((fileinput.filename(), line.strip())) 
+
+    return sequence
 
 
 #
@@ -33,7 +52,43 @@ def load_input(input_directory):
 # realiza el preprocesamiento de las líneas de texto,
 #
 def line_preprocessing(sequence):
-    """Line Preprocessing"""
+    """
+    Preprocess a list of tuples containing text lines.
+
+    This function takes a list of tuples where each tuple consists of a key and a text line.
+    It processes each text line by:
+    1. Removing all punctuation.
+    2. Converting all characters to lowercase.
+    3. Stripping leading and trailing whitespace.
+
+    Args:
+        sequence (list of tuples): A list of tuples where each tuple contains a key and a text line.
+
+    Returns:
+        list of tuples: A list of tuples with the processed text lines.
+    """
+    # Initialize an empty list to store the processed tuples
+    processed_sequence = []
+
+    # Iterate over each tuple in the input list
+    for key, value in sequence:
+        # Remove punctuation from the text line
+        value_no_punctuation = value.translate(str.maketrans("", "", string.punctuation))
+        
+        # Convert the text line to lowercase
+        value_lowercase = value_no_punctuation.lower()
+        
+        # Strip leading and trailing whitespace from the text line
+        value_stripped = value_lowercase.strip()
+        
+        # Append the processed tuple to the list
+        processed_sequence.append((key, value_stripped))
+
+    # Return the list of processed tuples
+    return processed_sequence
+
+    
+
 
 
 #
@@ -50,6 +105,22 @@ def line_preprocessing(sequence):
 #
 def mapper(sequence):
     """Mapper"""
+    # return [(word, 1) for _ , text_line in sequence for word in text_line.split()]
+# Initialize an empty list to store the word counts
+    word_count_list = []
+
+    # Iterate over each tuple in the input list
+    for _, text_line in sequence:
+        # Split the text line into words
+        words = text_line.split()
+        
+        # Iterate over each word in the text line
+        for word in words:
+            # Append the word and count (1) as a tuple to the list
+            word_count_list.append((word, 1))
+    
+    # Return the list of word counts
+    return word_count_list
 
 
 #
@@ -65,6 +136,8 @@ def mapper(sequence):
 #
 def shuffle_and_sort(sequence):
     """Shuffle and Sort"""
+    return sorted(sequence, key=lambda x: x[0])
+    
 
 
 #
@@ -75,6 +148,17 @@ def shuffle_and_sort(sequence):
 #
 def reducer(sequence):
     """Reducer"""
+    # Initialize an empty dictionary to store the aggregated values
+    dict_sequence = {}
+
+    # Iterate over each tuple in the input list
+    for key, value in sequence:
+        # If the key is already in the dictionary, add the value to the existing value
+        # If the key is not in the dictionary, initialize it with the value
+        dict_sequence[key] = dict_sequence.get(key, 0) + value
+
+    # Convert the dictionary items to a list of tuples and return it
+    return list(dict_sequence.items())
 
 
 #
@@ -83,6 +167,17 @@ def reducer(sequence):
 #
 def create_ouptput_directory(output_directory):
     """Create Output Directory"""
+    # Check if the output directory exists
+    if os.path.exists(output_directory):
+        # Iterate over each file in the output directory
+        for file in glob.glob(f"{output_directory}/*"):
+            # Remove the file
+            os.remove(file)
+        # Remove the output directory itself
+        os.rmdir(output_directory)
+    
+    # Create a new output directory
+    os.mkdir(output_directory)
 
 
 #
@@ -95,6 +190,9 @@ def create_ouptput_directory(output_directory):
 #
 def save_output(output_directory, sequence):
     """Save Output"""
+    with open(f"{output_directory}/part-00000", "w", encoding="utf-8") as file:
+        for key, value in sequence:
+            file.write(f"{key}\t{value}\n")
 
 
 #
@@ -103,6 +201,8 @@ def save_output(output_directory, sequence):
 #
 def create_marker(output_directory):
     """Create Marker"""
+    with open(f"{output_directory}/_SUCCESS", "w", encoding="utf-8") as file:
+        file.write("")
 
 
 #
@@ -110,10 +210,19 @@ def create_marker(output_directory):
 #
 def run_job(input_directory, output_directory):
     """Job"""
+    files = load_input(input_directory)
+    files = line_preprocessing(files)
+    files = mapper(files)
+    files = shuffle_and_sort(files)
+    files = reducer(files)
+    create_ouptput_directory(output_directory)
+    save_output(output_directory, files)
+    create_marker(output_directory)
+    print(files)
 
 
 if __name__ == "__main__":
     run_job(
-        "input",
-        "output",
+        "files/input",
+        "files/output",
     )
